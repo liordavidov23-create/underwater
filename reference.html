@@ -1,0 +1,542 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>פלטפורמת דמו: ניווט תת-ימי עם רשת מצופים ו-GNSS</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;700;800&display=swap" rel="stylesheet">
+<style>
+:root{
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px);
+  padding-bottom:env(safe-area-inset-bottom,0px);
+  --bg:#e9f0fb; --card:#f7faff; --fg:#0c2347; --muted:#4f6585; --line:#c3d2ea;
+  --water:#dbe8fa; --grid:rgba(12,35,71,.12); --accent:#1c5fd1; --buoy:#f5c518; --diver:#0c2347; --warn:#946a00; --ok:#1c5fd1;
+  --pill:rgba(247,250,255,.93); --strip:rgba(245,197,24,.16);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#061326; --card:#0c1f3a; --fg:#e6eefb; --muted:#8fa6c8; --line:#1c3a66;
+    --water:#0a1a33; --grid:rgba(230,238,251,.10); --accent:#5aa2ff; --buoy:#ffd23f; --diver:#e6eefb; --warn:#ffd23f; --ok:#7db8ff;
+    --pill:rgba(12,31,58,.93); --strip:rgba(255,210,63,.12);
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#061326; --card:#0c1f3a; --fg:#e6eefb; --muted:#8fa6c8; --line:#1c3a66;
+  --water:#0a1a33; --grid:rgba(230,238,251,.10); --accent:#5aa2ff; --buoy:#ffd23f; --diver:#e6eefb; --warn:#ffd23f; --ok:#7db8ff;
+  --pill:rgba(12,31,58,.93); --strip:rgba(255,210,63,.12);
+}
+html{scroll-padding-top:env(safe-area-inset-top,0px);height:100%}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font-family:'Heebo',system-ui,-apple-system,'Segoe UI',Arial,sans-serif;line-height:1.5}
+.page{max-width:1240px;margin:0 auto;padding:16px 16px 40px}
+.top{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:12px}
+h1{font-size:1.45rem;margin:0;font-weight:800;letter-spacing:-.01em}
+.tabs{display:flex;gap:6px;flex-wrap:wrap}
+.tabs button,.btn{font:inherit;font-size:.9rem;color:var(--fg);background:transparent;border:1px solid var(--line);border-radius:8px;padding:7px 12px;cursor:pointer}
+.tabs button[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:700}
+.btn[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn.primary{border-color:var(--accent);color:var(--accent);font-weight:700}
+button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.layout{display:grid;grid-template-columns:minmax(0,1fr) 330px;gap:16px;align-items:start}
+@media (max-width:900px){.layout{grid-template-columns:1fr}}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px}
+.card h2{font-size:1rem;margin:0 0 10px;font-weight:700}
+.stack{display:flex;flex-direction:column;gap:16px}
+
+.story{display:grid;grid-template-columns:repeat(6,1fr);gap:6px;margin-bottom:10px}
+@media (max-width:700px){.story{grid-template-columns:repeat(3,1fr)}}
+.story button{font:inherit;text-align:right;color:var(--fg);background:transparent;border:1px solid var(--line);border-radius:10px;padding:7px 9px;cursor:pointer;display:flex;gap:7px;align-items:baseline}
+.story .n{font-weight:800;color:var(--accent)}
+.story .t{font-size:.82rem;font-weight:500;line-height:1.25}
+.story button[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:#fff}
+.story button[aria-pressed="true"] .n{color:#fff}
+.caption{font-size:1.05rem;font-weight:500;margin:0 0 12px;min-height:1.6em}
+
+.readout{display:flex;align-items:center;gap:18px;flex-wrap:wrap;margin-bottom:12px}
+.big{display:flex;align-items:baseline;gap:8px}
+.big .num{font-size:3rem;font-weight:800;line-height:1;font-variant-numeric:tabular-nums;direction:ltr}
+.big .unit{font-size:1.05rem;font-weight:700}
+.big small{display:block;color:var(--muted);font-size:.78rem;max-width:18ch;line-height:1.3}
+.chip{border-radius:999px;padding:5px 13px;font-weight:700;font-size:.9rem;border:2px solid currentColor}
+.chip.good{color:var(--ok)} .chip.bad{color:var(--warn)}
+.meta{display:flex;gap:14px;flex-wrap:wrap;color:var(--muted);font-size:.85rem}
+.meta b{color:var(--fg);font-variant-numeric:tabular-nums}
+.est{font-size:.72rem;color:var(--muted);border:1px solid var(--line);border-radius:4px;padding:0 5px;margin-inline-start:4px}
+
+canvas{display:block;width:100%;touch-action:none;border-radius:8px}
+.mapwrap{position:relative}
+#map{aspect-ratio:7/6;cursor:grab;background:var(--water)}
+#map.drag{cursor:grabbing}
+#prof{height:150px}
+.legend{display:flex;align-items:center;gap:8px;margin-top:8px;font-size:.8rem;color:var(--muted);flex-wrap:wrap}
+.legend canvas{width:160px;height:10px;border-radius:3px}
+.hint{font-size:.82rem;color:var(--muted);margin-top:6px}
+
+.counter{display:flex;align-items:center;gap:10px;margin:8px 0}
+.counter button{font:inherit;font-size:1.2rem;font-weight:700;width:38px;height:38px;border-radius:8px;border:1px solid var(--line);background:transparent;color:var(--fg);cursor:pointer}
+.counter b{font-size:1.6rem;min-width:2ch;text-align:center}
+.bar{height:14px;border-radius:7px;background:var(--water);border:1px solid var(--line);position:relative;overflow:hidden;margin:6px 0}
+.bar i{position:absolute;inset-block:0;right:0;background:var(--accent);transition:width .25s}
+.bar .goal{position:absolute;inset-block:-2px;width:2px;background:var(--fg)}
+.covnum{font-size:2rem;font-weight:800;font-variant-numeric:tabular-nums}
+.success{border:2px solid var(--ok);color:var(--ok);border-radius:8px;padding:8px 10px;font-weight:700;margin:10px 0;display:none}
+.success.show{display:block}
+
+.row{margin:12px 0}
+.row label{display:flex;justify-content:space-between;font-size:.88rem;margin-bottom:3px}
+.row label output{direction:ltr;color:var(--accent);font-weight:700}
+input[type=range]{width:100%;accent-color:var(--accent)}
+.seg{display:flex;flex-wrap:wrap;gap:6px}
+.seg button{font:inherit;font-size:.84rem;color:var(--fg);background:transparent;border:1px solid var(--line);border-radius:8px;padding:6px 10px;cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:#fff}
+.sec{font-size:.8rem;color:var(--muted);margin:16px 0 4px;font-weight:500}
+.note{font-size:.8rem;color:var(--muted);margin-top:14px;border-top:1px solid var(--line);padding-top:10px}
+
+/* view switching */
+.only-present,.only-challenge,.only-explore{display:none}
+body.v-present .only-present,body.v-challenge .only-challenge,body.v-explore .only-explore{display:block}
+body.v-present .story.only-present{display:grid}
+body.v-present .layout{grid-template-columns:1fr}
+body.v-present .side{display:none}
+body.v-present .mapwrap{max-width:calc(62vh * 7 / 6);margin:0 auto}
+body.v-present .caption{text-align:center;font-size:1.25rem}
+body.v-present .readout{justify-content:center}
+body.v-present .big .num{font-size:4rem}
+</style>
+</head>
+<body class="v-present">
+<div class="page">
+  <div class="top">
+    <h1>ניווט תת-ימי עם רשת מצופים ו-GNSS</h1>
+    <div class="tabs" id="views" role="group" aria-label="מצב תצוגה">
+      <button data-v="present" aria-pressed="true">הצגה</button>
+      <button data-v="challenge" aria-pressed="false">אתגר</button>
+      <button data-v="explore" aria-pressed="false">חקירה</button>
+      <button class="btn primary" id="fsBtn" type="button">מסך מלא</button>
+    </div>
+  </div>
+
+  <div class="layout">
+    <div class="stack">
+      <div class="card">
+        <div class="story only-present" id="story">
+          <button data-step="0" aria-pressed="true"><span class="n">0</span><span class="t">שאלת פתיחה</span></button>
+          <button data-step="1" aria-pressed="false"><span class="n">1</span><span class="t">מצופים מסביב</span></button>
+          <button data-step="2" aria-pressed="false"><span class="n">2</span><span class="t">רק ממערב</span></button>
+          <button data-step="3" aria-pressed="false"><span class="n">3</span><span class="t">מתרחקים מזרחה</span></button>
+          <button data-step="4" aria-pressed="false"><span class="n">4</span><span class="t">בלי סנכרון שעון</span></button>
+          <button data-step="5" aria-pressed="false"><span class="n">5</span><span class="t">האתגר שלכם</span></button>
+        </div>
+        <p class="caption only-present" id="caption"></p>
+
+        <div class="readout" aria-live="polite">
+          <div class="big">
+            <span class="num" id="bigNum">-</span><span class="unit">מ'</span>
+            <small id="bigLbl">שגיאה אופקית (1σ) של המשתמש הגרוע מבין החמישה</small>
+          </div>
+          <div class="chip" id="chip">-</div>
+          <div class="meta">
+            <span>כיסוי מתחת למטר: <b id="sCov">-</b></span>
+            <span>שיטה: <b id="sMode">-</b></span>
+            <span>קצב עדכון למשתמש: <b id="sRate">-</b></span>
+            <span class="est">הערכה ממודל</span>
+          </div>
+        </div>
+
+        <div class="mapwrap"><canvas id="map" aria-label="מפת שגיאה אינטראקטיבית: גררו מצופים, צוללנים ורובוטים"></canvas></div>
+        <div class="legend"><span>מתחת למטר</span><canvas id="leg" width="160" height="10"></canvas><span>5 מ' ומעלה</span><span>| צוללנים: עיגולים D, רובוטים: ריבועים R. האליפסות מוגדלות פי <b id="magLbl">12</b></span></div>
+      </div>
+
+      <div class="card only-explore">
+        <h2>השגיאה לאורך קו מערב-מזרח שעובר דרך המשתמש הגרוע</h2>
+        <canvas id="prof"></canvas>
+        <div class="hint">סימני הצהוב בתחתית הם המצופים, הקו האנכי הוא המשתמש, והקו המקווקו הוא יעד של מטר אחד.</div>
+      </div>
+    </div>
+
+    <div class="stack side">
+      <div class="card only-challenge">
+        <h2>האתגר</h2>
+        <p style="margin:0 0 8px">הגיעו ל-<b>80%</b> משטח העבודה מתחת למטר, עם <b>כמה שפחות מצופים</b>. מותר לגרור מצופים רק בתוך הרצועה הצהובה במערב.</p>
+        <div class="counter">
+          <button id="cMinus" aria-label="הסר מצוף">−</button><b id="cCount">3</b><button id="cPlus" aria-label="הוסף מצוף">+</button><span>מצופים</span>
+        </div>
+        <div class="covnum" id="cCov">-</div>
+        <div class="bar"><i id="cBar" style="width:0%"></i><span class="goal" style="right:80%"></span></div>
+        <div class="success" id="cSuccess"></div>
+        <div class="seg" style="margin-top:10px">
+          <button id="cSolve">הראה פתרון מוצע</button>
+          <button id="cReset">התחל מחדש</button>
+        </div>
+        <div class="note">רמז לדיון: עברו למצב חקירה והקטינו את שגיאת ה-GNSS של המצופים (כמו מקלט RTK). כמה מצופים צריך עכשיו? לפעמים שדרוג ציוד חוסך מצופים, ולפעמים מצוף זול חוסך שדרוג.</div>
+      </div>
+
+      <div class="card only-explore">
+        <h2>הגדרות</h2>
+        <div class="sec">מצופים</div>
+        <div class="counter"><button id="eMinus" aria-label="הסר מצוף">−</button><b id="eCount">4</b><button id="ePlus" aria-label="הוסף מצוף">+</button></div>
+        <div class="sec">שיטת מדידה</div>
+        <div class="seg" id="mode">
+          <button data-m="sync" aria-pressed="true">חד-כיווני מסונכרן (פסיבי)</button>
+          <button data-m="unsync" aria-pressed="false">חד-כיווני ללא סנכרון</button>
+          <button data-m="active" aria-pressed="false">דו-כיווני (המשתמשים משדרים)</button>
+        </div>
+        <div class="sec">מקורות שגיאה (ערכים טיפוסיים, הנחה)</div>
+        <div class="row"><label for="pRange">רעש מדידת טווח <output id="oRange"></output></label><input type="range" id="pRange" min="0.05" max="2" step="0.05" value="0.3"></div>
+        <div class="row"><label for="pC">שגיאת מהירות קול <output id="oC"></output></label><input type="range" id="pC" min="0" max="1" step="0.05" value="0.2"></div>
+        <div class="row"><label for="pG">שגיאת GNSS של המצופים <output id="oG"></output></label><input type="range" id="pG" min="0" max="3" step="0.05" value="0.5"></div>
+        <div class="row"><label for="pClk">שגיאת שעון (במצב מסונכרן) <output id="oClk"></output></label><input type="range" id="pClk" min="0" max="2000" step="50" value="200"></div>
+        <div class="row"><label for="pDepth">עומק המשתמשים <output id="oDepth"></output></label><input type="range" id="pDepth" min="0" max="40" step="1" value="15"></div>
+        <div class="sec">תצוגה</div>
+        <div class="row"><label for="pMag">הגדלת אליפסות <output id="oMag"></output></label><input type="range" id="pMag" min="1" max="40" step="1" value="12"></div>
+        <div class="seg">
+          <button id="tHeat" aria-pressed="true">מפת שגיאה</button>
+          <button id="tCont" aria-pressed="true">קו מטר</button>
+          <button id="tCloud" aria-pressed="false">ענן דגימות</button>
+        </div>
+        <div class="note">
+          <b>הנחות המודל (הערכה, לא מדידה):</b> ריבועים פחותים לינאריים, קול בקו ישר ובמהירות קבועה, שגיאות גאוסיאניות ובלתי תלויות, ללא הדים, עומק ידוע ממד לחץ. קצב העדכון מניח שידור מצופים בתורות (פסיבי) או שידור משתמשים בתורות (דו-כיווני), עם 50 אלפיות שנייה הפרדה. לשמירת המפה כתמונה: קליק ימני על המפה ושמירת תמונה.
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+const WW=280, WH=240, BD=2, C_SND=1500, MAXB=8;
+const AREA={x0:70,y0:45,x1:270,y1:195};   // work area 200x150 m
+const STRIP=65;                            // buoys allowed x<=STRIP in challenge
+const P={range:0.3,c:0.2,g:0.5,clk:200,depth:15,mag:12,mode:'sync',heat:true,cont:true,cloud:false,hideBuoys:false};
+const LAY={
+  around:[[60,35],[275,40],[270,205],[65,200]],
+  west:[[60,30],[40,95],[40,155],[60,215]],
+  chal:[[55,90],[55,120],[55,150]],
+  solve:[[65,2],[65,60],[65,120],[65,180],[65,238]]
+};
+const FORM=[{id:'D1',k:'d',dx:-20,dy:40},{id:'D2',k:'d',dx:10,dy:-25},{id:'D3',k:'d',dx:28,dy:32},{id:'R1',k:'r',dx:-12,dy:0},{id:'R2',k:'r',dx:32,dy:-45}];
+const CENTER={x:165,y:120};
+let buoys=LAY.west.map(p=>({x:p[0],y:p[1]}));
+let users=FORM.map(f=>({id:f.id,k:f.k,x:CENTER.x+f.dx,y:CENTER.y+f.dy}));
+let view='present', challenge=false, solved=false;
+const reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
+function gauss(){let u=0,v=0;while(!u)u=Math.random();while(!v)v=Math.random();return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v);}
+const Z=Array.from({length:140},()=>[gauss(),gauss()]);
+const $=id=>document.getElementById(id);
+const map=$('map'), ctx=map.getContext('2d'), prof=$('prof'), pctx=prof.getContext('2d');
+const css=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const MODE_LBL={sync:'פסיבי מסונכרן',unsync:'פסיבי ללא סנכרון',active:'דו-כיווני'};
+
+// ---------- engine (separate from view) ----------
+const Engine={
+  inv(M,n){
+    if(n===2){const d=M[0][0]*M[1][1]-M[0][1]*M[1][0];if(!isFinite(d)||Math.abs(d)<1e-12)return null;return [[M[1][1]/d,-M[0][1]/d],[-M[1][0]/d,M[0][0]/d]];}
+    const a=M;
+    const c00=a[1][1]*a[2][2]-a[1][2]*a[2][1],c01=a[1][2]*a[2][0]-a[1][0]*a[2][2],c02=a[1][0]*a[2][1]-a[1][1]*a[2][0];
+    const d=a[0][0]*c00+a[0][1]*c01+a[0][2]*c02; if(!isFinite(d)||Math.abs(d)<1e-12)return null;
+    const c10=a[0][2]*a[2][1]-a[0][1]*a[2][2],c11=a[0][0]*a[2][2]-a[0][2]*a[2][0],c12=a[0][1]*a[2][0]-a[0][0]*a[2][1];
+    const c20=a[0][1]*a[1][2]-a[0][2]*a[1][1],c21=a[0][2]*a[1][0]-a[0][0]*a[1][2],c22=a[0][0]*a[1][1]-a[0][1]*a[1][0];
+    return [[c00/d,c10/d,c20/d],[c01/d,c11/d,c21/d],[c02/d,c12/d,c22/d]];
+  },
+  calc(px,py,bs,p){
+    const dim=p.mode==='unsync'?3:2;
+    if(bs.length<dim) return null;
+    const N=[[0,0,0],[0,0,0],[0,0,0]],U=[[0,0,0],[0,0,0],[0,0,0]];
+    const clkM=C_SND*p.clk*1e-6, dz=p.depth-BD;
+    for(const b of bs){
+      const dx=px-b.x,dy=py-b.y,r=Math.max(1,Math.sqrt(dx*dx+dy*dy+dz*dz));
+      let s2=p.range*p.range+Math.pow(p.c/100*r,2)+p.g*p.g; if(p.mode==='sync') s2+=clkM*clkM;
+      const w=1/s2,h=[dx/r,dy/r,p.mode==='unsync'?1:0];
+      for(let i=0;i<3;i++)for(let j=0;j<3;j++){N[i][j]+=w*h[i]*h[j];U[i][j]+=h[i]*h[j];}
+    }
+    const C=this.inv(N,dim),CU=this.inv(U,dim); if(!C) return null;
+    const a=C[0][0],b=C[0][1],d=C[1][1]; if(a<0||d<0) return null;
+    return {a,b,d,rms:Math.sqrt(a+d),hdop:CU?Math.sqrt(Math.max(CU[0][0]+CU[1][1],0)):Infinity};
+  },
+  rateHz(bs,us,p){
+    if(!bs.length) return 0;
+    let R=0; for(const b of bs)for(const u of us){R=Math.max(R,Math.hypot(b.x-u.x,b.y-u.y,p.depth-BD));}
+    const guard=0.05;
+    const T=p.mode==='active'? us.length*(2*R/C_SND+guard) : bs.length*(R/C_SND+guard);
+    return 1/T;
+  }
+};
+const calc=(x,y)=>P.hideBuoys?null:Engine.calc(x,y,buoys,P);
+
+function hull(pts){
+  const p=pts.map(q=>[q.x,q.y]).sort((u,v)=>u[0]-v[0]||u[1]-v[1]); if(p.length<3) return p;
+  const cr=(o,a,b)=>(a[0]-o[0])*(b[1]-o[1])-(a[1]-o[1])*(b[0]-o[0]);
+  const lo=[];for(const q of p){while(lo.length>=2&&cr(lo[lo.length-2],lo[lo.length-1],q)<=0)lo.pop();lo.push(q);}
+  const up=[];for(let i=p.length-1;i>=0;i--){const q=p[i];while(up.length>=2&&cr(up[up.length-2],up[up.length-1],q)<=0)up.pop();up.push(q);}
+  lo.pop();up.pop();return lo.concat(up);
+}
+
+// ---------- color ----------
+const STOPS=[[0,[10,48,140]],[0.99,[96,172,242]],[1.0,[255,226,70]],[2.5,[242,184,28]],[5,[150,100,0]]];
+function heatColor(e){
+  if(e==null||!isFinite(e)) return [24,28,48];
+  if(e>=5) return STOPS[4][1];
+  for(let i=0;i<STOPS.length-1;i++){const a=STOPS[i],b=STOPS[i+1];if(e>=a[0]&&e<=b[0]){const t=(e-a[0])/(b[0]-a[0]||1);return a[1].map((v,k)=>v+(b[1][k]-v)*t);}}
+  return STOPS[0][1];
+}
+(function(){const lc=$('leg').getContext('2d'),im=lc.createImageData(160,10);for(let x=0;x<160;x++){const c=heatColor(x/160*5);for(let y=0;y<10;y++){const k=(y*160+x)*4;im.data[k]=c[0];im.data[k+1]=c[1];im.data[k+2]=c[2];im.data[k+3]=255;}}lc.putImageData(im,0,0);})();
+
+// ---------- heat grid ----------
+const GW=140,GH=120;
+const off=document.createElement('canvas');off.width=GW;off.height=GH;const octx=off.getContext('2d');
+let V=[], coverage=0;
+function renderHeat(){
+  V=[];
+  for(let j=0;j<=GH;j++){const row=[];for(let i=0;i<=GW;i++){const s=calc(i/GW*WW,WH-j/GH*WH);row.push(s?Math.min(s.rms,999):999);}V.push(row);}
+  const im=octx.createImageData(GW,GH); let n=0,k=0;
+  for(let j=0;j<GH;j++)for(let i=0;i<GW;i++){
+    const e=(V[j][i]+V[j][i+1]+V[j+1][i]+V[j+1][i+1])/4;
+    const c=heatColor(e>=999?null:e),q=(j*GW+i)*4;
+    im.data[q]=c[0];im.data[q+1]=c[1];im.data[q+2]=c[2];im.data[q+3]=170;
+    const wx=(i+.5)/GW*WW, wy=WH-(j+.5)/GH*WH;
+    if(wx>=AREA.x0&&wx<=AREA.x1&&wy>=AREA.y0&&wy<=AREA.y1){n++;if(e<1)k++;}
+  }
+  octx.putImageData(im,0,0);
+  coverage=n?k/n:0;
+}
+function contourSegs(T){
+  const segs=[],lerp=(a,b)=>{const d=b-a;return d===0?.5:Math.min(1,Math.max(0,(T-a)/d));};
+  for(let j=0;j<GH;j++)for(let i=0;i<GW;i++){
+    const tl=V[j][i],tr=V[j][i+1],br=V[j+1][i+1],bl=V[j+1][i];
+    const idx=(tl>=T?8:0)|(tr>=T?4:0)|(br>=T?2:0)|(bl>=T?1:0); if(idx===0||idx===15) continue;
+    const top=[i+lerp(tl,tr),j],right=[i+1,j+lerp(tr,br)],bottom=[i+lerp(bl,br),j+1],left=[i,j+lerp(tl,bl)];
+    const add=(a,b)=>segs.push([a,b]);
+    switch(idx){case 1:case 14:add(left,bottom);break;case 2:case 13:add(bottom,right);break;case 3:case 12:add(left,right);break;case 4:case 11:add(top,right);break;case 6:case 9:add(top,bottom);break;case 7:case 8:add(left,top);break;case 5:add(left,top);add(bottom,right);break;case 10:add(top,right);add(left,bottom);break;}
+  }
+  return segs;
+}
+
+// ---------- drawing ----------
+let dpr=1,cw=0,ch=0;
+function fit(cv,h){const r=cv.getBoundingClientRect();dpr=window.devicePixelRatio||1;cv.width=Math.round(r.width*dpr);cv.height=Math.round((h||r.height)*dpr);return {w:r.width,h:h||r.height};}
+const sx=x=>x/WW*cw, sy=y=>(WH-y)/WH*ch;
+function pill(c,text,x,y,color){
+  c.font='700 11px Heebo,sans-serif';
+  const w=c.measureText(text).width+12,h=18;
+  const x0=Math.max(3,Math.min(cw-w-3,x-w/2)),y0=Math.max(3,Math.min(ch-h-3,y-h/2));
+  c.fillStyle=css('--pill');c.strokeStyle=color;c.lineWidth=1.5;
+  c.beginPath();c.roundRect?c.roundRect(x0,y0,w,h,9):c.rect(x0,y0,w,h);c.fill();c.stroke();
+  c.fillStyle=color;c.textAlign='center';c.textBaseline='middle';c.fillText(text,x0+w/2,y0+h/2+.5);c.textBaseline='alphabetic';
+}
+function userStats(){return users.map(u=>({u,st:calc(u.x,u.y)}));}
+function worst(us){let w=null;for(const o of us){const e=o.st?o.st.rms:Infinity;if(!w||e>(w.st?w.st.rms:Infinity))w=o;}return w;}
+
+function drawMap(){
+  const d=fit(map);cw=d.w;ch=d.h;
+  ctx.setTransform(dpr,0,0,dpr,0,0);ctx.clearRect(0,0,cw,ch);
+  ctx.fillStyle=css('--water');ctx.fillRect(0,0,cw,ch);
+  const showHeat=P.heat&&!P.hideBuoys;
+  if(showHeat){ctx.imageSmoothingEnabled=true;ctx.drawImage(off,0,0,cw,ch);}
+  // west strip
+  ctx.fillStyle=css('--strip');ctx.fillRect(0,0,sx(STRIP),ch);
+  ctx.strokeStyle=css('--buoy');ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(sx(STRIP),0);ctx.lineTo(sx(STRIP),ch);ctx.stroke();
+  // grid
+  ctx.strokeStyle=css('--grid');ctx.lineWidth=1;ctx.fillStyle=css('--muted');ctx.font='11px Heebo,sans-serif';ctx.textAlign='left';
+  for(let x=40;x<WW;x+=40){ctx.beginPath();ctx.moveTo(sx(x),0);ctx.lineTo(sx(x),ch);ctx.stroke();ctx.fillText(x+' מ\'',sx(x)+3,ch-4);}
+  for(let y=40;y<WH;y+=40){ctx.beginPath();ctx.moveTo(0,sy(y));ctx.lineTo(cw,sy(y));ctx.stroke();}
+  // work area
+  ctx.setLineDash([8,5]);ctx.strokeStyle=css('--fg');ctx.lineWidth=1.5;
+  ctx.strokeRect(sx(AREA.x0),sy(AREA.y1),sx(AREA.x1)-sx(AREA.x0),sy(AREA.y0)-sy(AREA.y1));ctx.setLineDash([]);
+  ctx.fillStyle=css('--fg');ctx.font='700 12px Heebo,sans-serif';ctx.textAlign='right';
+  ctx.fillText('שטח העבודה 200×150 מ\'',sx(AREA.x1)-6,sy(AREA.y1)+16);
+  ctx.save();ctx.translate(sx(STRIP/2),ch/2);ctx.rotate(-Math.PI/2);ctx.textAlign='center';ctx.fillStyle=css('--fg');ctx.font='700 12px Heebo,sans-serif';ctx.fillText('אזור מותר למצופים (מערב)',0,4);ctx.restore();
+  ctx.font='700 12px Heebo,sans-serif';ctx.textAlign='right';ctx.fillText('מזרח →',cw-8,18);ctx.textAlign='center';ctx.fillText('צפון ↑',(sx(STRIP)+cw)/2,18);
+  // contour
+  if(P.cont&&showHeat&&V.length){
+    const segs=contourSegs(1),gx=v=>v/GW*cw,gy=v=>v/GH*ch;
+    ctx.lineWidth=4;ctx.strokeStyle=css('--pill');ctx.beginPath();for(const s of segs){ctx.moveTo(gx(s[0][0]),gy(s[0][1]));ctx.lineTo(gx(s[1][0]),gy(s[1][1]));}ctx.stroke();
+    ctx.lineWidth=2;ctx.strokeStyle=css('--fg');ctx.beginPath();for(const s of segs){ctx.moveTo(gx(s[0][0]),gy(s[0][1]));ctx.lineTo(gx(s[1][0]),gy(s[1][1]));}ctx.stroke();
+    if(segs.length){let best=null,bd=-1;for(const s of segs){const mx=gx((s[0][0]+s[1][0])/2),my=gy((s[0][1]+s[1][1])/2);const dd=Math.min(...users.map(u=>Math.hypot(mx-sx(u.x),my-sy(u.y))));if(dd>bd&&mx>sx(STRIP)+40&&my>30&&my<ch-30){bd=dd;best=[mx,my];}}if(best)pill(ctx,'גבול 1 מטר',best[0],best[1],css('--fg'));}
+  }
+  if(!P.hideBuoys){
+    const h=hull(buoys);
+    if(h.length>=3){ctx.setLineDash([6,5]);ctx.strokeStyle=css('--buoy');ctx.lineWidth=1.5;ctx.beginPath();h.forEach((q,i)=>i?ctx.lineTo(sx(q[0]),sy(q[1])):ctx.moveTo(sx(q[0]),sy(q[1])));ctx.closePath();ctx.stroke();ctx.setLineDash([]);}
+  }
+  // users
+  const us=userStats(), w=worst(us), ppm=cw/WW, m=P.mag;
+  for(const o of us){
+    const u=o.u,st=o.st,x=sx(u.x),y=sy(u.y);
+    if(st){
+      if(P.cloud&&o===w){const l11=Math.sqrt(st.a),l21=l11?st.b/l11:0,l22=Math.sqrt(Math.max(st.d-l21*l21,0));ctx.fillStyle=css('--fg');ctx.globalAlpha=.4;for(const z of Z){const ex=l11*z[0],ey=l21*z[0]+l22*z[1];ctx.beginPath();ctx.arc(x+ex*m*ppm,y-ey*m*ppm,1.6,0,6.2832);ctx.fill();}ctx.globalAlpha=1;}
+      const tr=st.a+st.d,df=(st.a-st.d)/2,rt=Math.sqrt(df*df+st.b*st.b);
+      const l1=tr/2+rt,l2=Math.max(tr/2-rt,0),ang=0.5*Math.atan2(2*st.b,st.a-st.d),k=2.447*m*ppm;
+      ctx.strokeStyle=css('--fg');ctx.lineWidth=o===w?2.4:1.4;ctx.globalAlpha=o===w?1:.75;
+      ctx.beginPath();ctx.ellipse(x,y,Math.min(Math.max(Math.sqrt(l1)*k,1),3000),Math.min(Math.max(Math.sqrt(l2)*k,1),3000),-ang,0,6.2832);ctx.stroke();ctx.globalAlpha=1;
+    }
+    ctx.fillStyle=css('--diver');ctx.strokeStyle=css('--water');ctx.lineWidth=2;
+    ctx.beginPath(); if(u.k==='r'){ctx.rect(x-7,y-7,14,14);}else{ctx.arc(x,y,7,0,6.2832);} ctx.fill();ctx.stroke();
+    if(o===w){ctx.strokeStyle=css('--warn');ctx.lineWidth=2;ctx.beginPath();ctx.arc(x,y,12,0,6.2832);ctx.stroke();}
+    const e=st?st.rms:null;
+    pill(ctx,u.id+'  '+(e==null?'—':'±'+(e>99?'>99':e.toFixed(2))),x,y-20,e!=null&&e<1?css('--ok'):css('--warn'));
+  }
+  // buoys
+  if(!P.hideBuoys) buoys.forEach((b,i)=>{
+    ctx.beginPath();ctx.arc(sx(b.x),sy(b.y),10,0,6.2832);ctx.fillStyle=css('--buoy');ctx.fill();ctx.lineWidth=2;ctx.strokeStyle=css('--fg');ctx.stroke();
+    ctx.fillStyle='#0c2347';ctx.font='800 10px Heebo,sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText('B'+(i+1),sx(b.x),sy(b.y)+.5);ctx.textBaseline='alphabetic';
+  });
+}
+
+function drawProf(){
+  if(view!=='explore') return;
+  const d=fit(prof,150),w=d.w,h=d.h; pctx.setTransform(dpr,0,0,dpr,0,0);pctx.clearRect(0,0,w,h);
+  const L=34,R=8,T=8,B=20,pw=w-L-R,ph=h-T-B,EM=5,X=x=>L+x/WW*pw,Y=e=>T+ph-Math.min(e,EM)/EM*ph;
+  pctx.strokeStyle=css('--grid');pctx.fillStyle=css('--muted');pctx.font='11px Heebo,sans-serif';pctx.lineWidth=1;pctx.textAlign='right';
+  for(let e=0;e<=EM;e++){pctx.beginPath();pctx.moveTo(L,Y(e));pctx.lineTo(w-R,Y(e));pctx.stroke();pctx.fillText(e+'',L-5,Y(e)+4);}
+  pctx.textAlign='center';for(let x=0;x<=WW;x+=70)pctx.fillText(x+' מ\'',X(x),h-5);
+  pctx.setLineDash([5,4]);pctx.strokeStyle=css('--ok');pctx.beginPath();pctx.moveTo(L,Y(1));pctx.lineTo(w-R,Y(1));pctx.stroke();pctx.setLineDash([]);
+  const wu=worst(userStats()); if(!wu) return; const yy=wu.u.y;
+  pctx.strokeStyle=css('--accent');pctx.lineWidth=2.4;pctx.beginPath();
+  for(let i=0;i<=220;i++){const x=i/220*WW,s=calc(x,yy),e=s?s.rms:EM;i?pctx.lineTo(X(x),Y(e)):pctx.moveTo(X(x),Y(e));}pctx.stroke();
+  for(const b of buoys){pctx.fillStyle=css('--buoy');pctx.fillRect(X(b.x)-3,T+ph-7,6,7);}
+  pctx.strokeStyle=css('--fg');pctx.lineWidth=1.5;pctx.beginPath();pctx.moveTo(X(wu.u.x),T);pctx.lineTo(X(wu.u.x),T+ph);pctx.stroke();
+}
+
+function updateStats(){
+  const us=userStats(), w=worst(us), num=$('bigNum'), chip=$('chip');
+  $('sMode').textContent=MODE_LBL[P.mode];
+  $('sCov').textContent=P.hideBuoys?'-':Math.round(coverage*100)+'%';
+  const hz=Engine.rateHz(P.hideBuoys?[]:buoys,users,P);
+  $('sRate').textContent=hz?hz.toFixed(2)+' Hz':'-';
+  $('cCount').textContent=buoys.length; $('eCount').textContent=buoys.length;
+  const cov=Math.round(coverage*100);
+  $('cCov').textContent=cov+'% מהשטח מתחת למטר'; $('cBar').style.width=Math.min(100,cov)+'%';
+  const sc=$('cSuccess');
+  if(challenge&&cov>=80){sc.className='success show';sc.textContent=solved?'כך נראית פריסה של '+buoys.length+' מצופים שעוברת את היעד. אפשר לעשות את זה עם פחות?':'הצלחתם: '+cov+'% כיסוי עם '+buoys.length+' מצופים. אפשר לעשות את זה עם פחות?';}
+  else sc.className='success';
+  if(P.hideBuoys||!w||!w.st){num.textContent=P.hideBuoys?'?':'∞';num.style.color=css('--muted');chip.className='chip bad';chip.textContent=P.hideBuoys?'עוד אין מצופים':'אין פתרון';$('bigLbl').textContent='שגיאה אופקית (1σ) של המשתמש הגרוע מבין החמישה';return;}
+  const e=w.st.rms;
+  num.textContent=e>99?'>99':e.toFixed(2); num.style.color=e<1?css('--ok'):css('--warn');
+  $('bigLbl').textContent='שגיאה אופקית (1σ) של '+w.u.id+', הגרוע מבין החמישה';
+  chip.className='chip '+(e<1?'good':'bad'); chip.textContent=e<1?'כולם מתחת למטר':'לא כולם מתחת למטר';
+}
+function refresh(heat){if(heat||!V.length)renderHeat();drawMap();drawProf();updateStats();}
+
+// ---------- animation ----------
+let anim=null;
+const ease=t=>t<.5?2*t*t:1-Math.pow(-2*t+2,2)/2;
+function stop(){if(anim){cancelAnimationFrame(anim.id);anim=null;}}
+function setBuoys(list){buoys=list.map(p=>({x:p[0],y:p[1]}));}
+function animate(tB,tCenter,dur,done){
+  stop();
+  if(tB&&tB.length!==buoys.length){ // match counts first
+    while(buoys.length<tB.length){const p=tB[buoys.length];buoys.push({x:p[0],y:p[1]});}
+    buoys=buoys.slice(0,tB.length);
+  }
+  const sB=buoys.map(b=>({x:b.x,y:b.y})), sU=users.map(u=>({x:u.x,y:u.y}));
+  const tU=tCenter?FORM.map(f=>({x:tCenter.x+f.dx,y:tCenter.y+f.dy})):null;
+  const apply=k=>{
+    if(tB) tB.forEach((p,i)=>{buoys[i].x=sB[i].x+(p[0]-sB[i].x)*k;buoys[i].y=sB[i].y+(p[1]-sB[i].y)*k;});
+    if(tU) users.forEach((u,i)=>{u.x=sU[i].x+(tU[i].x-sU[i].x)*k;u.y=sU[i].y+(tU[i].y-sU[i].y)*k;});
+  };
+  if(reduce||dur<=0){apply(1);refresh(true);done&&done();return;}
+  const t0=performance.now(); anim={};
+  const step=now=>{const t=Math.min(1,(now-t0)/dur);apply(ease(t));refresh(!!tB);if(t<1)anim.id=requestAnimationFrame(step);else{anim=null;done&&done();}};
+  anim.id=requestAnimationFrame(step);
+}
+
+// ---------- story ----------
+const CAPS=[
+  'יש לכם 4 מצופים, ומותר לשים אותם רק ברצועה הצהובה ממערב לשטח העבודה. איפה הייתם שמים אותם?',
+  'כשהמצופים מקיפים את השטח, כמעט הכול כחול: המדידות מגיעות מכל הכיוונים והשגיאות מבטלות זו את זו.',
+  'במציאות מותר רק ממערב. כל המידע מגיע מאותו צד, והצהוב מתפשט מזרחה.',
+  'הצוות מתקדם מזרחה. ככל שמתרחקים, כל המצופים "נראים" מאותו כיוון, והאליפסות מתארכות מצפון לדרום.',
+  'בלי שעון מסונכרן, המערכת צריכה לנחש גם את הפער בין השעונים, והדיוק צונח.',
+  ''
+];
+function press(box,attr,val){$(box).querySelectorAll('button[data-'+attr+']').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset[attr]===String(val))));}
+function setMode(m){P.mode=m;press('mode','m',m);}
+function setStep(n){
+  press('story','step',n); $('caption').textContent=CAPS[n]||'';
+  challenge=false;
+  if(n===0){setMode('sync');P.hideBuoys=true;stop();setBuoys(LAY.west);users.forEach((u,i)=>{u.x=CENTER.x+FORM[i].dx;u.y=CENTER.y+FORM[i].dy;});refresh(true);}
+  else P.hideBuoys=false;
+  if(n===1){setMode('sync');animate(LAY.around,CENTER,1100);}
+  if(n===2){setMode('sync');animate(LAY.west,CENTER,1100);}
+  if(n===3){setMode('sync');animate(LAY.west,{x:115,y:120},700,()=>animate(null,{x:232,y:120},reduce?0:4200));}
+  if(n===4){setMode('unsync');refresh(true);}
+  if(n===5){setView('challenge');}
+}
+$('story').addEventListener('click',e=>{const b=e.target.closest('button');if(b)setStep(parseInt(b.dataset.step,10));});
+
+// ---------- views ----------
+function startChallenge(){
+  challenge=true; solved=false; P.hideBuoys=false; setMode('sync'); stop();
+  setBuoys(LAY.chal); users.forEach((u,i)=>{u.x=CENTER.x+FORM[i].dx;u.y=CENTER.y+FORM[i].dy;}); refresh(true);
+}
+function setView(v){
+  view=v; document.body.className='v-'+v; press('views','v',v);
+  if(v==='challenge'){ if(!challenge) startChallenge(); }
+  else { challenge=false; if(v==='explore'){P.hideBuoys=false;} }
+  requestAnimationFrame(()=>refresh(true));
+}
+$('views').addEventListener('click',e=>{const b=e.target.closest('button[data-v]');if(b)setView(b.dataset.v);});
+$('cReset').addEventListener('click',startChallenge);
+$('cSolve').addEventListener('click',()=>{solved=true;animate(LAY.solve,null,1000);});
+function addBuoy(){
+  if(buoys.length>=MAXB) return; P.hideBuoys=false;
+  const ys=buoys.map(b=>b.y).sort((a,b)=>a-b); let best=WH/2,gap=-1,prev=0;
+  for(const y of ys.concat([WH])){if(y-prev>gap){gap=y-prev;best=(y+prev)/2;}prev=y;}
+  buoys.push({x:challenge?50:50,y:best}); refresh(true);
+}
+function removeBuoy(){if(buoys.length>1){buoys.pop();refresh(true);}}
+$('cPlus').addEventListener('click',addBuoy);$('cMinus').addEventListener('click',removeBuoy);
+$('ePlus').addEventListener('click',addBuoy);$('eMinus').addEventListener('click',removeBuoy);
+
+// ---------- drag ----------
+let drag=null;
+function toWorld(e){const r=map.getBoundingClientRect();return {x:(e.clientX-r.left)/r.width*WW,y:WH-(e.clientY-r.top)/r.height*WH,ppm:r.width/WW};}
+map.addEventListener('pointerdown',e=>{
+  stop(); const p=toWorld(e); let best=null,bd=1e9;
+  const cand=(P.hideBuoys?[]:buoys.map(b=>({o:b,b:true}))).concat(users.map(u=>({o:u,b:false})));
+  for(const c of cand){const d=Math.hypot(c.o.x-p.x,c.o.y-p.y)*p.ppm;if(d<bd){bd=d;best=c;}}
+  if(best&&bd<26){drag=best;map.setPointerCapture(e.pointerId);map.classList.add('drag');}
+});
+map.addEventListener('pointermove',e=>{
+  if(!drag) return; const p=toWorld(e);
+  const maxX=drag.b&&challenge?STRIP:WW;
+  drag.o.x=Math.min(maxX,Math.max(0,p.x)); drag.o.y=Math.min(WH,Math.max(0,p.y));
+  refresh(drag.b);
+});
+const endDrag=()=>{drag=null;map.classList.remove('drag');};
+map.addEventListener('pointerup',endDrag);map.addEventListener('pointercancel',endDrag);
+
+// ---------- explore controls ----------
+function bindRange(id,key,out,fmt){
+  const el=$(id),o=$(out);
+  const upd=()=>{P[key]=parseFloat(el.value);o.textContent=fmt(P[key]);if(key==='mag')$('magLbl').textContent=P.mag;};
+  el.addEventListener('input',()=>{upd();refresh(key!=='mag');}); upd();
+}
+bindRange('pRange','range','oRange',v=>v.toFixed(2)+' מ\'');
+bindRange('pC','c','oC',v=>v.toFixed(2)+'%');
+bindRange('pG','g','oG',v=>v.toFixed(2)+' מ\'');
+bindRange('pClk','clk','oClk',v=>v+' µs (≈'+(C_SND*v*1e-6).toFixed(2)+' מ\')');
+bindRange('pDepth','depth','oDepth',v=>v+' מ\'');
+bindRange('pMag','mag','oMag',v=>'×'+v);
+$('mode').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;setMode(b.dataset.m);refresh(true);});
+function toggle(id,key){const b=$(id);b.addEventListener('click',()=>{P[key]=!P[key];b.setAttribute('aria-pressed',String(P[key]));refresh(false);});}
+toggle('tHeat','heat');toggle('tCont','cont');toggle('tCloud','cloud');
+
+// ---------- fullscreen + keys ----------
+$('fsBtn').addEventListener('click',()=>{
+  try{ if(document.fullscreenElement){document.exitFullscreen().catch(()=>{});} else if(document.documentElement.requestFullscreen){document.documentElement.requestFullscreen().catch(()=>{});} }catch(_){}
+});
+document.addEventListener('fullscreenchange',()=>{$('fsBtn').textContent=document.fullscreenElement?'יציאה ממסך מלא':'מסך מלא';setTimeout(()=>refresh(false),60);});
+document.addEventListener('keydown',e=>{
+  if(e.target.tagName==='INPUT') return;
+  if(view==='present'&&/^[0-5]$/.test(e.key)) setStep(parseInt(e.key,10));
+});
+
+window.addEventListener('resize',()=>refresh(false));
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change',()=>refresh(false));
+setStep(0);
+})();
+</script>
+</body>
+</html>
